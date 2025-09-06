@@ -174,16 +174,17 @@
         </button>
         <h2 class="text-2xl font-semibold mb-4 text-gray-800">Operações</h2>
 
-        <!-- Novo Campo de URL -->
+        <!-- Importar Planilha Google -->
         <div class="mb-4">
-            <label for="url-input" class="block text-sm font-medium text-gray-700">Carregar Solução por URL:</label>
+            <label for="sheet-url-input" class="block text-sm font-medium text-gray-700">Importar do Google Sheets:</label>
             <div class="mt-1 flex rounded-md shadow-sm">
-                <input type="text" id="url-input" placeholder="Cole a URL da solução" class="block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
-                <button id="load-url-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Carregar
+                <input type="text" id="sheet-url-input" placeholder="Cole o link de uma planilha pública" class="block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                <button id="load-sheet-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Importar
                 </button>
             </div>
-            <p id="url-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
+            <p class="text-xs text-gray-500 mt-1">A planilha deve estar pública e com as colunas: Nome, Categoria, Preço, Link, Detalhes.</p>
+            <p id="sheet-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
 
         <!-- Adicionar Nova Categoria -->
@@ -293,9 +294,9 @@
         const resetFiltersBtn = document.getElementById('reset-filters-btn');
         const addCategoryInput = document.getElementById('add-category-input');
         const addCategoryBtn = document.getElementById('add-category-btn');
-        const urlInput = document.getElementById('url-input');
-        const loadUrlBtn = document.getElementById('load-url-btn');
-        const urlErrorMsg = document.getElementById('url-error-msg');
+        const sheetUrlInput = document.getElementById('sheet-url-input');
+        const loadSheetBtn = document.getElementById('load-sheet-btn');
+        const sheetErrorMsg = document.getElementById('sheet-error-msg');
         const sidebar = document.getElementById('sidebar');
         const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
         const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
@@ -393,52 +394,6 @@
             }
         ];
 
-        // Simulando um "backend" para carregar soluções por URL
-        const simulatedUrlData = {
-            "https://meusite.com/solucao/escola-jardim": {
-                category: "Educação Infantil",
-                region: "Vila Mariana",
-                name: "Escola Jardim dos Sonhos",
-                address: "Rua Padre Machado, 200, Vila Mariana",
-                landmark: "Próximo ao metrô Santa Cruz",
-                phone: "(11) 5555-9876",
-                website: "https://www.jardimdossonhos.com.br",
-                ageGroup: "1 a 5 anos",
-                schedule: "Integral (8h às 18h)",
-                methodology: "Construtivista",
-                notes: "Espaço com horta pedagógica e piscina aquecida.",
-                price: "R$ 2.200,00 - R$ 3.000,00",
-                isFavorite: false
-            },
-            "https://meusite.com/solucao/idiomas-universal": {
-                category: "Cursos de Idiomas",
-                region: "Centro",
-                name: "Universal Idiomas",
-                address: "Avenida Ipiranga, 100, Centro",
-                landmark: "Esquina com a Avenida São João",
-                phone: "(11) 5555-1111",
-                website: "https://www.universalidiomas.com.br",
-                languages: "Inglês, Espanhol, Alemão, Mandarim.",
-                schedule: "Vários horários, inclusive aos sábados.",
-                notes: "Professores nativos e aulas com foco em conversação desde o início.",
-                price: "R$ 450,00 - R$ 700,00",
-                isFavorite: false
-            },
-            "https://meusite.com/solucao/smart-fit-lapa": {
-                category: "Academias de Ginástica",
-                region: "Vila Mariana",
-                name: "Academia Smart Fit Lapa",
-                address: "Rua Domingos de Morais, 999, Vila Mariana",
-                landmark: "Próximo ao metrô Ana Rosa",
-                phone: "(11) 5555-1234",
-                website: "https://www.smartfit.com.br",
-                services: "Musculação, aulas de ritmos e funcional.",
-                schedule: "Integral",
-                price: "R$ 80,00 - R$ 150,00",
-                isFavorite: false
-            },
-        };
-        
         let filteredSolutions = [...allSolutions];
         let visibleSolutions = filteredSolutions.slice(0, 6);
 
@@ -451,42 +406,96 @@
         sidebarToggleBtn.addEventListener('click', toggleSidebar);
         sidebarCloseBtn.addEventListener('click', toggleSidebar);
         overlay.addEventListener('click', toggleSidebar);
-        
-        async function handleLoadUrl() {
-            const url = urlInput.value.trim();
+
+        // --- Nova Lógica de Importação do Google Sheets ---
+
+        function parseCsvToObjects(csvText) {
+            const rows = csvText.trim().split('\n');
+            const headers = rows.shift().split(',').map(h => h.trim());
+
+            return rows.map(row => {
+                const values = row.split(',').map(v => v.trim());
+                let obj = {};
+                headers.forEach((header, index) => {
+                    // Mapeia os nomes das colunas da planilha para as chaves do nosso objeto
+                    const key = header.toLowerCase();
+                    if (key === 'nome') obj.name = values[index];
+                    else if (key === 'categoria') obj.category = values[index];
+                    else if (key === 'preço') obj.price = values[index];
+                    else if (key === 'link') obj.website = values[index];
+                    else if (key === 'detalhes') obj.notes = values[index];
+                    else {
+                        // Para outras colunas, podemos adicionar como notas ou um campo genérico
+                        obj.notes = (obj.notes || '') + ` ${header}: ${values[index]}`;
+                    }
+                });
+                 // Adiciona valores padrão para campos que não estão na planilha
+                obj.region = obj.region || 'N/A';
+                obj.address = obj.address || 'N/A';
+                obj.landmark = obj.landmark || 'N/A';
+                obj.phone = obj.phone || 'N/A';
+                obj.isFavorite = false;
+                return obj;
+            });
+        }
+
+        async function handleLoadSheet() {
+            const url = sheetUrlInput.value.trim();
+            sheetErrorMsg.classList.add('hidden');
+
             if (url === '') {
-                urlErrorMsg.textContent = "Por favor, cole uma URL válida.";
-                urlErrorMsg.classList.remove('hidden');
+                sheetErrorMsg.textContent = "Por favor, insira a URL da planilha.";
+                sheetErrorMsg.classList.remove('hidden');
                 return;
             }
 
-            urlErrorMsg.classList.add('hidden');
-            
-            // Simula o carregamento
-            const solutionData = simulatedUrlData[url];
+            // Expressão regular para extrair o ID e o GID da planilha
+            const regex = /spreadsheets\/d\/([a-zA-Z0-9-_]+)\/(?:edit|htmlview)?(?:#gid=([0-9]+))?/;
+            const matches = url.match(regex);
 
-            if (solutionData) {
-                // Checa se a solução já existe para evitar duplicatas
-                const existingSolution = allSolutions.find(s => s.name === solutionData.name);
-                if (existingSolution) {
-                    urlErrorMsg.textContent = "Esta solução já está na lista!";
-                    urlErrorMsg.classList.remove('hidden');
-                    return;
+            if (!matches || !matches[1]) {
+                sheetErrorMsg.textContent = "URL inválida. Use o link de compartilhamento do Google Sheets.";
+                sheetErrorMsg.classList.remove('hidden');
+                return;
+            }
+
+            const sheetId = matches[1];
+            const gid = matches[2] || '0'; // Se o gid não for especificado, usa a primeira página (gid=0)
+            
+            const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+            try {
+                // Feedback visual de carregamento
+                loadSheetBtn.textContent = 'Carregando...';
+                loadSheetBtn.disabled = true;
+
+                const response = await fetch(csvUrl);
+                if (!response.ok) {
+                    throw new Error('Não foi possível carregar a planilha. Verifique se ela está pública.');
                 }
+                const csvText = await response.text();
+
+                const newSolutions = parseCsvToObjects(csvText);
                 
-                allSolutions.unshift(solutionData);
+                // Substitui as soluções atuais pelas da planilha
+                allSolutions = newSolutions;
                 filterSolutions();
-                urlInput.value = '';
-            } else {
-                urlErrorMsg.textContent = "URL não reconhecida. Use uma das URLs de exemplo.";
-                urlErrorMsg.classList.remove('hidden');
+                sheetUrlInput.value = '';
+
+            } catch (error) {
+                sheetErrorMsg.textContent = error.message;
+                sheetErrorMsg.classList.remove('hidden');
+            } finally {
+                // Restaura o botão
+                loadSheetBtn.textContent = 'Importar';
+                loadSheetBtn.disabled = false;
             }
         }
 
-        loadUrlBtn.addEventListener('click', handleLoadUrl);
-        urlInput.addEventListener('keypress', (e) => {
+        loadSheetBtn.addEventListener('click', handleLoadSheet);
+        sheetUrlInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                handleLoadUrl();
+                handleLoadSheet();
             }
         });
 
