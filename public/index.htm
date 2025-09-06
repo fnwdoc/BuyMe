@@ -183,7 +183,7 @@
                     Importar
                 </button>
             </div>
-            <p class="text-xs text-gray-500 mt-1">A planilha deve estar pública e com as colunas: Nome, Categoria, Preço, Link, Detalhes.</p>
+            <p class="text-xs text-gray-500 mt-1">Colunas esperadas: Nome, Categoria, Preço, Link, Endereço, Telefone, Detalhes.</p>
             <p id="sheet-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
 
@@ -423,6 +423,8 @@
                     else if (key === 'categoria') obj.category = values[index];
                     else if (key === 'preço') obj.price = values[index];
                     else if (key === 'link') obj.website = values[index];
+                    else if (key === 'endereço') obj.address = values[index];
+                    else if (key === 'telefone') obj.phone = values[index];
                     else if (key === 'detalhes') obj.notes = values[index];
                     else {
                         // Para outras colunas, podemos adicionar como notas ou um campo genérico
