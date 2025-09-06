@@ -174,17 +174,15 @@
         </button>
         <h2 class="text-2xl font-semibold mb-4 text-gray-800">Operações</h2>
 
-        <!-- Importar Planilha Google -->
+        <!-- Importar via CSV -->
         <div class="mb-4">
-            <label for="sheet-url-input" class="block text-sm font-medium text-gray-700">Importar do Google Sheets:</label>
-            <div class="mt-1 flex rounded-md shadow-sm">
-                <input type="text" id="sheet-url-input" placeholder="Cole o link de uma planilha pública" class="block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
-                <button id="load-sheet-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Importar
-                </button>
-            </div>
-            <p class="text-xs text-gray-500 mt-1">Colunas esperadas: Nome, Categoria, Preço, Link, Endereço, Telefone, Detalhes.</p>
-            <p id="sheet-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
+            <label for="csv-input" class="block text-sm font-medium text-gray-700">Importar Dados (CSV):</label>
+            <textarea id="csv-input" rows="5" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 mt-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Cole aqui o conteúdo do seu arquivo .csv..."></textarea>
+            <button id="import-csv-btn" class="mt-2 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Importar CSV
+            </button>
+            <p class="text-xs text-gray-500 mt-1">No Google Sheets, vá em Arquivo > Fazer download > CSV.</p>
+            <p id="import-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
 
         <!-- Adicionar Nova Categoria -->
@@ -294,9 +292,9 @@
         const resetFiltersBtn = document.getElementById('reset-filters-btn');
         const addCategoryInput = document.getElementById('add-category-input');
         const addCategoryBtn = document.getElementById('add-category-btn');
-        const sheetUrlInput = document.getElementById('sheet-url-input');
-        const loadSheetBtn = document.getElementById('load-sheet-btn');
-        const sheetErrorMsg = document.getElementById('sheet-error-msg');
+        const csvInput = document.getElementById('csv-input');
+        const importCsvBtn = document.getElementById('import-csv-btn');
+        const importErrorMsg = document.getElementById('import-error-msg');
         const sidebar = document.getElementById('sidebar');
         const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
         const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
@@ -441,62 +439,31 @@
             });
         }
 
-        async function handleLoadSheet() {
-            const url = sheetUrlInput.value.trim();
-            sheetErrorMsg.classList.add('hidden');
+        function handleImportCsv() {
+            const csvText = csvInput.value.trim();
+            importErrorMsg.classList.add('hidden');
 
-            if (url === '') {
-                sheetErrorMsg.textContent = "Por favor, insira a URL da planilha.";
-                sheetErrorMsg.classList.remove('hidden');
+            if (csvText === '') {
+                importErrorMsg.textContent = "Por favor, cole o conteúdo do CSV na área de texto.";
+                importErrorMsg.classList.remove('hidden');
                 return;
             }
 
             try {
-                // Feedback visual de carregamento
-                loadSheetBtn.textContent = 'Carregando...';
-                loadSheetBtn.disabled = true;
-
-                // Lógica simplificada: Envia a URL crua para o nosso servidor local tratar
-                const serverResponse = await fetch('/fetch-sheet', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ url: url }), // Envia a URL original
-                });
-
-                if (!serverResponse.ok) {
-                    // Tenta ler a mensagem de erro do servidor, se houver
-                    const errorData = await serverResponse.json().catch(() => null);
-                    const errorMessage = errorData?.error || `Erro do servidor: ${serverResponse.statusText}`;
-                    throw new Error(errorMessage);
-                }
-
-                const csvText = await serverResponse.text();
-                
                 const newSolutions = parseCsvToObjects(csvText);
 
                 // Substitui as soluções atuais pelas da planilha
                 allSolutions = newSolutions;
-                filterSolutions();
-                sheetUrlInput.value = '';
+                filterSolutions(); // Re-renderiza a lista com os novos dados
+                csvInput.value = ''; // Limpa a área de texto
 
             } catch (error) {
-                sheetErrorMsg.textContent = `Falha na importação: ${error.message}`;
-                sheetErrorMsg.classList.remove('hidden');
-            } finally {
-                // Restaura o botão
-                loadSheetBtn.textContent = 'Importar';
-                loadSheetBtn.disabled = false;
+                importErrorMsg.textContent = `Falha ao processar os dados: ${error.message}`;
+                importErrorMsg.classList.remove('hidden');
             }
         }
 
-        loadSheetBtn.addEventListener('click', handleLoadSheet);
-        sheetUrlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleLoadSheet();
-            }
-        });
+        importCsvBtn.addEventListener('click', handleImportCsv);
 
         // Função para simular a busca no "backend"
         async function fetchSolutionData(solutionName) {
