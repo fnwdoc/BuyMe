@@ -469,11 +469,23 @@
                 loadSheetBtn.textContent = 'Carregando...';
                 loadSheetBtn.disabled = true;
 
-                const response = await fetch(csvUrl);
-                if (!response.ok) {
-                    throw new Error('Não foi possível carregar a planilha. Verifique se ela está pública.');
+                // Nova lógica: Envia a URL para o nosso servidor local tratar
+                const serverResponse = await fetch('/fetch-sheet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: csvUrl }),
+                });
+
+                if (!serverResponse.ok) {
+                    // Tenta ler a mensagem de erro do servidor, se houver
+                    const errorData = await serverResponse.json().catch(() => null);
+                    const errorMessage = errorData?.error || `Erro do servidor: ${serverResponse.statusText}`;
+                    throw new Error(errorMessage);
                 }
-                const csvText = await response.text();
+
+                const csvText = await serverResponse.text();
 
                 const newSolutions = parseCsvToObjects(csvText);
                 
@@ -483,7 +495,7 @@
                 sheetUrlInput.value = '';
 
             } catch (error) {
-                sheetErrorMsg.textContent = error.message;
+                sheetErrorMsg.textContent = `Falha na importação: ${error.message}`;
                 sheetErrorMsg.classList.remove('hidden');
             } finally {
                 // Restaura o botão
