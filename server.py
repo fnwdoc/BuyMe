@@ -22,8 +22,11 @@ class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if not sheet_url:
                     raise ValueError("URL da planilha não fornecida.")
 
-                # Use requests to fetch the CSV, it handles redirects automatically
-                response = requests.get(sheet_url)
+                # Use requests to fetch the CSV, pretending to be a browser by setting the User-Agent header
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+                response = requests.get(sheet_url, headers=headers)
                 response.raise_for_status()  # Raises an exception for bad status codes (4xx or 5xx)
 
                 # Send a 200 OK response
