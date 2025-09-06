@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seletor de Soluções Dinâmico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.15);
+        }
+        .solution-card {
+            cursor: pointer;
+            border: 2px solid transparent;
+            position: relative;
+        }
+        .solution-card.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px #bfdbfe;
+        }
+        .card a {
+            color: #2563eb;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .card a:hover {
+            text-decoration: underline;
+        }
+        .remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            z-index: 10;
+        }
+        .remove-btn:hover {
+            background-color: #dc2626;
+        }
+        .favorite-btn {
+            color: #d1d5db;
+            transition: color 0.2s;
+        }
+        .favorite-btn.favorited {
+            color: #f59e0b;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Sidebar e visualização Mobile/Desktop */
+        .sidebar {
+            width: 250px;
+            position: fixed;
+            top: 0;
+            left: -250px; /* Escondido por padrão em mobile */
+            height: 100%;
+            background-color: #f8fafc;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            transition: left 0.3s ease-in-out;
+            z-index: 40;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .sidebar.open {
+            left: 0;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 30;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* Oculta o botão do menu em mobile quando o menu está aberto */
+        .sidebar.open + #overlay + .main-container .sidebar-toggle-btn {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Desktop: Sidebar visível e conteúdo empurrado para o lado */
+        @media (min-width: 768px) {
+            .sidebar {
+                left: 0; /* Sempre visível */
+                box-shadow: none;
+                z-index: 10;
+            }
+            .main-content {
+                margin-left: 250px; /* Cria espaço para o sidebar */
+            }
+            .sidebar-toggle-btn {
+                display: none; /* Oculta o botão de menu em desktop */
+            }
+            .overlay {
+                display: none; /* Oculta o overlay em desktop */
+            }
+        }
+    </style>
+</head>
+<body class="p-6">
+
+<!-- Cabeçalho Principal (visível em todas as telas) -->
+<header class="bg-white p-4 shadow-md flex items-center justify-between z-50 fixed top-0 left-0 right-0">
+    <div class="flex items-center space-x-4">
+        <!-- Botão de Abertura do Menu (visível apenas em mobile) -->
+        <button id="sidebar-toggle-btn" class="p-3 bg-blue-600 text-white rounded-full shadow-lg md:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <h1 class="text-xl font-bold text-gray-800 md:text-3xl">Seletor Dinâmico de Soluções</h1>
+    </div>
+    <!-- Espaço para futuros elementos à direita no desktop -->
+</header>
+
+<div class="main-container mx-auto">
+    <!-- Overlay para o menu (Mobile) -->
+    <div id="overlay" class="overlay md:hidden"></div>
+
+    <!-- Sidebar de Filtros -->
+    <aside id="sidebar" class="sidebar pt-20 md:pt-6">
+        <!-- Botão de Fechar (visível apenas em mobile) -->
+        <button id="sidebar-close-btn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-900 md:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <h2 class="text-2xl font-semibold mb-4 text-gray-800">Operações</h2>
+
+        <!-- Novo Campo de URL -->
+        <div class="mb-4">
+            <label for="url-input" class="block text-sm font-medium text-gray-700">Carregar Solução por URL:</label>
+            <div class="mt-1 flex rounded-md shadow-sm">
+                <input type="text" id="url-input" placeholder="Cole a URL da solução" class="block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                <button id="load-url-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Carregar
+                </button>
+            </div>
+            <p id="url-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
+        </div>
+
+        <!-- Adicionar Nova Categoria -->
+        <div class="mb-4">
+            <label for="add-category-input" class="block text-sm font-medium text-gray-700">Adicionar nova Categoria:</label>
+            <div class="mt-1 flex rounded-md shadow-sm">
+                <input type="text" id="add-category-input" placeholder="Ex: Restaurantes" class="block w-full rounded-l-md border-gray-300 focus:ring-green-500 focus:border-green-500 sm:text-sm p-2">
+                <button id="add-category-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    Adicionar
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtro de Categoria -->
+        <div>
+            <label for="category-filter" class="block text-sm font-medium text-gray-700">Categoria:</label>
+            <select id="category-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                <option value="all">Todas</option>
+                <option value="Educação Infantil">Educação Infantil</option>
+                <option value="Academias de Ginástica">Academias de Ginástica</option>
+                <option value="Cursos de Idiomas">Cursos de Idiomas</option>
+            </select>
+        </div>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content pt-20 md:pt-6">
+        <header class="text-center mb-10 md:hidden">
+            <p class="text-lg text-gray-600">Filtre, compare e adicione novas categorias de soluções.</p>
+            <p id="solution-count" class="text-md text-gray-500 mt-2"></p>
+            <p class="text-xs text-red-500 mt-1">Aviso: Os dados são fictícios para fins de demonstração. Em uma aplicação real, uma busca em uma API seria feita por um servidor para trazer dados precisos.</p>
+        </header>
+
+        <!-- Filtros Principais -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <!-- Filtro de Região -->
+            <div>
+                <label for="region-filter" class="block text-sm font-medium text-gray-700">Região:</label>
+                <select id="region-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                    <option value="all">Todas as Regiões</option>
+                    <option value="Aclimação">Aclimação</option>
+                    <option value="Vila Mariana">Vila Mariana</option>
+                    <option value="Ipiranga">Ipiranga</option>
+                    <option value="Centro">Centro</option>
+                </select>
+            </div>
+
+            <!-- Filtro de Preço -->
+            <div>
+                <label for="price-filter" class="block text-sm font-medium text-gray-700">Faixa de Preço:</label>
+                <select id="price-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                    <option value="all">Todos os Preços</option>
+                    <option value="up-to-150">Até R$ 150,00</option>
+                    <option value="151-300">R$ 151,00 a R$ 300,00</option>
+                    <option value="301-500">R$ 301,00 a R$ 500,00</option>
+                    <option value="up-to-2000">Até R$ 2.000,00</option>
+                    <option value="2001-3000">R$ 2.001,00 a R$ 3.000,00</option>
+                    <option value="above-3000">Acima de R$ 3.000,00</option>
+                    <option value="not-published">Não Publicado / Grátis</option>
+                </select>
+            </div>
+
+            <!-- Botão de Limpar Filtros -->
+            <button id="reset-filters-btn" class="px-4 py-2 self-end text-sm font-medium rounded-md text-white bg-gray-500 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Limpar Filtros
+            </button>
+        </div>
+
+
+        <!-- Campo de busca principal -->
+        <div class="flex-grow mb-6">
+            <label for="search-input" class="block text-sm font-medium text-gray-700">Buscar uma solução:</label>
+            <div class="mt-1 flex rounded-md shadow-sm">
+                <input type="text" id="search-input" placeholder="Ex: Colégio Dom Pedro I" class="block w-full rounded-l-md border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                <button id="search-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <span id="search-btn-text">Buscar</span>
+                    <div id="loading-spinner" class="loading-spinner ml-2 hidden"></div>
+                </button>
+            </div>
+        </div>
+
+        <div id="solution-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+            <!-- Os cards das soluções serão renderizados aqui -->
+        </div>
+
+        <div id="compare-section" class="card p-6 bg-blue-50">
+            <h2 class="text-2xl font-semibold text-blue-800 mb-4">Comparativo de Soluções</h2>
+            <div id="comparison-table" class="bg-white p-4 rounded-lg shadow-inner">
+                <p class="text-center text-gray-500">Selecione até 3 soluções acima para comparar.</p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const solutionList = document.getElementById('solution-list');
+        const comparisonTable = document.getElementById('comparison-table');
+        const solutionCountDisplay = document.getElementById('solution-count');
+        const categoryFilter = document.getElementById('category-filter');
+        const regionFilter = document.getElementById('region-filter');
+        const priceFilter = document.getElementById('price-filter');
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const searchBtnText = document.getElementById('search-btn-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const resetFiltersBtn = document.getElementById('reset-filters-btn');
+        const addCategoryInput = document.getElementById('add-category-input');
+        const addCategoryBtn = document.getElementById('add-category-btn');
+        const urlInput = document.getElementById('url-input');
+        const loadUrlBtn = document.getElementById('load-url-btn');
+        const urlErrorMsg = document.getElementById('url-error-msg');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+        const overlay = document.getElementById('overlay');
+
+        let selectedSolutions = [];
+
+        // Dados iniciais das soluções (agora com categorias e regiões)
+        let allSolutions = [
+            {
+                category: "Educação Infantil",
+                region: "Aclimação",
+                name: "Colégio Tutor",
+                address: "Rua Batista do Carmo, 170, Aclimação",
+                landmark: "Próximo à Praça General Polidoro",
+                phone: "(11) 3345-6789",
+                website: "https://www.colegiotutor.com.br",
+                ageGroup: "Até 5º ano",
+                schedule: "Integral (7h às 12:30h)",
+                methodology: "Sociointeracionista",
+                notes: "Foco em atividades lúdicas, artes e desenvolvimento psicomotor.",
+                price: "R$ 1.500,00 - R$ 2.000,00",
+                isFavorite: false
+            },
+            {
+                category: "Educação Infantil",
+                region: "Aclimação",
+                name: "Escola A Doce Vida",
+                address: "Rua Antonio Tavares, 191, Aclimação",
+                landmark: "Próximo à Rua Pires da Mota",
+                phone: "(11) 3277-8090",
+                website: "https://www.escoladocevida.com.br",
+                ageGroup: "4 meses a 5 anos",
+                schedule: "Integral (7:30h às 18:30h)",
+                methodology: "Sociointeracionista e abordagem Reggio Emilia",
+                notes: "Atividades de música, inglês e capoeira. Atendimento prolongado.",
+                price: "R$ 1.800,00 - R$ 2.500,00",
+                isFavorite: false
+            },
+            {
+                category: "Academias de Ginástica",
+                region: "Vila Mariana",
+                name: "Academia Flex",
+                address: "Rua Vergueiro, 2500, Vila Mariana",
+                landmark: "Próximo ao metrô Ana Rosa",
+                phone: "(11) 9876-5432",
+                website: "https://www.academiaflex.com.br",
+                services: "Musculação, aulas de spinning e zumba. Aberta 24h.",
+                schedule: "Integral",
+                price: "R$ 180,00 - R$ 250,00",
+                isFavorite: false
+            },
+            {
+                category: "Cursos de Idiomas",
+                region: "Centro",
+                name: "Wizard Idiomas",
+                address: "Rua da Consolação, 101, Centro",
+                landmark: "Próximo à Praça Roosevelt",
+                phone: "(11) 1234-5678",
+                website: "https://www.wizard.com.br",
+                languages: "Inglês, Espanhol, Francês.",
+                schedule: "Vários turnos",
+                price: "R$ 350,00 - R$ 500,00",
+                isFavorite: false
+            },
+            {
+                category: "Educação Infantil",
+                region: "Ipiranga",
+                name: "Colégio Dom Pedro I",
+                address: "Av. Dom Pedro I, 301, Ipiranga",
+                landmark: "Próximo ao Parque da Independência",
+                phone: "(11) 2274-8575",
+                website: "https://www.colegiodompedroi.com.br",
+                ageGroup: "Educação Infantil (a partir de 4 anos)",
+                schedule: "Integral",
+                methodology: "Sistema de Ensino Objetivo",
+                notes: "Material didático alinhado com a BNCC. Foco em inteligência socioemocional.",
+                price: "Não Publicado",
+                isFavorite: false
+            },
+            {
+                category: "Educação Infantil",
+                region: "Aclimação",
+                name: "Colégio Fadelito",
+                address: "Rua Pires da Mota, 420, Aclimação",
+                landmark: "Próximo ao Parque da Aclimação",
+                phone: "(11) 3456-7890",
+                website: "https://www.colegiofadelito.com.br",
+                ageGroup: "0 a 6 anos",
+                schedule: "Integral (A confirmar)",
+                methodology: "Desenvolvimento integral com foco em valores e infraestrutura moderna.",
+                notes: "Central de monitoramento com mais de 800 câmeras. Foco em segurança.",
+                price: "R$ 2.000,00 - R$ 2.800,00",
+                isFavorite: false
+            }
+        ];
+
+        // Simulando um "backend" para carregar soluções por URL
+        const simulatedUrlData = {
+            "https://meusite.com/solucao/escola-jardim": {
+                category: "Educação Infantil",
+                region: "Vila Mariana",
+                name: "Escola Jardim dos Sonhos",
+                address: "Rua Padre Machado, 200, Vila Mariana",
+                landmark: "Próximo ao metrô Santa Cruz",
+                phone: "(11) 5555-9876",
+                website: "https://www.jardimdossonhos.com.br",
+                ageGroup: "1 a 5 anos",
+                schedule: "Integral (8h às 18h)",
+                methodology: "Construtivista",
+                notes: "Espaço com horta pedagógica e piscina aquecida.",
+                price: "R$ 2.200,00 - R$ 3.000,00",
+                isFavorite: false
+            },
+            "https://meusite.com/solucao/idiomas-universal": {
+                category: "Cursos de Idiomas",
+                region: "Centro",
+                name: "Universal Idiomas",
+                address: "Avenida Ipiranga, 100, Centro",
+                landmark: "Esquina com a Avenida São João",
+                phone: "(11) 5555-1111",
+                website: "https://www.universalidiomas.com.br",
+                languages: "Inglês, Espanhol, Alemão, Mandarim.",
+                schedule: "Vários horários, inclusive aos sábados.",
+                notes: "Professores nativos e aulas com foco em conversação desde o início.",
+                price: "R$ 450,00 - R$ 700,00",
+                isFavorite: false
+            },
+            "https://meusite.com/solucao/smart-fit-lapa": {
+                category: "Academias de Ginástica",
+                region: "Vila Mariana",
+                name: "Academia Smart Fit Lapa",
+                address: "Rua Domingos de Morais, 999, Vila Mariana",
+                landmark: "Próximo ao metrô Ana Rosa",
+                phone: "(11) 5555-1234",
+                website: "https://www.smartfit.com.br",
+                services: "Musculação, aulas de ritmos e funcional.",
+                schedule: "Integral",
+                price: "R$ 80,00 - R$ 150,00",
+                isFavorite: false
+            },
+        };
+        
+        let filteredSolutions = [...allSolutions];
+        let visibleSolutions = filteredSolutions.slice(0, 6);
+
+        // Funções para controle do menu lateral
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('visible');
+        }
+
+        sidebarToggleBtn.addEventListener('click', toggleSidebar);
+        sidebarCloseBtn.addEventListener('click', toggleSidebar);
+        overlay.addEventListener('click', toggleSidebar);
+        
+        async function handleLoadUrl() {
+            const url = urlInput.value.trim();
+            if (url === '') {
+                urlErrorMsg.textContent = "Por favor, cole uma URL válida.";
+                urlErrorMsg.classList.remove('hidden');
+                return;
+            }
+
+            urlErrorMsg.classList.add('hidden');
+            
+            // Simula o carregamento
+            const solutionData = simulatedUrlData[url];
+
+            if (solutionData) {
+                // Checa se a solução já existe para evitar duplicatas
+                const existingSolution = allSolutions.find(s => s.name === solutionData.name);
+                if (existingSolution) {
+                    urlErrorMsg.textContent = "Esta solução já está na lista!";
+                    urlErrorMsg.classList.remove('hidden');
+                    return;
+                }
+                
+                allSolutions.unshift(solutionData);
+                filterSolutions();
+                urlInput.value = '';
+            } else {
+                urlErrorMsg.textContent = "URL não reconhecida. Use uma das URLs de exemplo.";
+                urlErrorMsg.classList.remove('hidden');
+            }
+        }
+
+        loadUrlBtn.addEventListener('click', handleLoadUrl);
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleLoadUrl();
+            }
+        });
+
+        // Função para simular a busca no "backend"
+        async function fetchSolutionData(solutionName) {
+            searchBtnText.textContent = '';
+            loadingSpinner.classList.remove('hidden');
+            searchBtn.disabled = true;
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Dados de exemplo que seriam retornados do servidor
+            const simulatedData = {
+                "CNA Idiomas": {
+                    category: "Cursos de Idiomas",
+                    region: "Vila Mariana",
+                    name: "CNA Idiomas",
+                    address: "Rua Domingos de Morais, 800, Vila Mariana",
+                    landmark: "Próximo ao metrô Ana Rosa",
+                    phone: "(11) 5555-4321",
+                    website: "https://www.cna.com.br",
+                    languages: "Inglês, Espanhol.",
+                    schedule: "Aulas flexíveis.",
+                    price: "R$ 300,00 - R$ 450,00",
+                    isFavorite: false
+                },
+                "Academia Smart Fit": {
+                    category: "Academias de Ginástica",
+                    region: "Ipiranga",
+                    name: "Academia Smart Fit",
+                    address: "Rua dos Patriotas, 1200, Ipiranga",
+                    landmark: "Próximo ao Museu do Ipiranga",
+                    phone: "(11) 5555-1234",
+                    website: "https://www.smartfit.com.br",
+                    services: "Musculação, ergometria, aulas de ritmos. 24h.",
+                    schedule: "Integral",
+                    price: "R$ 80,00 - R$ 150,00",
+                    isFavorite: false
+                },
+                "Colégio Santo Agostinho": {
+                    category: "Educação Infantil",
+                    region: "Vila Mariana",
+                    name: "Colégio Santo Agostinho",
+                    address: "Rua Carlos Petit, 321, Vila Mariana",
+                    landmark: "Próximo ao metrô Ana Rosa",
+                    phone: "(11) 5555-1234",
+                    website: "https://www.colegiosantoagostinho.com.br",
+                    ageGroup: "Educação Infantil",
+                    schedule: "Integral",
+                    methodology: "Sociointeracionista",
+                    notes: "Tradição em educação católica, com foco no desenvolvimento ético e moral.",
+                    price: "R$ 2.800,00 - R$ 3.500,00",
+                    isFavorite: false
+                },
+                "Pizzaria da Vó Maria": {
+                    category: "Restaurantes",
+                    region: "Aclimação",
+                    name: "Pizzaria da Vó Maria",
+                    address: "Rua Santa Maria, 50, Aclimação",
+                    landmark: "Próximo à Rua Pires da Mota",
+                    phone: "(11) 3333-2222",
+                    website: "https://www.pizzariavovomaria.com.br",
+                    notes: "Conhecida por sua pizza de massa fina e recheio de qualidade. Oferece serviço de delivery e salão.",
+                    price: "R$ 30,00 - R$ 80,00",
+                    isFavorite: false
+                }
+            };
+            
+            const solutionData = simulatedData[solutionName] || null;
+
+            loadingSpinner.classList.add('hidden');
+            searchBtnText.textContent = 'Buscar';
+            searchBtn.disabled = false;
+            
+            return solutionData;
+        }
+
+        async function handleSearch() {
+            const solutionName = searchInput.value.trim();
+            if (solutionName === '') {
+                return;
+            }
+
+            const existingSolution = allSolutions.find(s => s.name === solutionName);
+            if (existingSolution) {
+                // substitua alert() por uma mensagem na tela para o usuário
+                console.log('Essa solução já está na lista!');
+                return;
+            }
+
+            const newSolution = await fetchSolutionData(solutionName);
+            if (newSolution) {
+                allSolutions.unshift(newSolution);
+                filterSolutions();
+                searchInput.value = '';
+            } else {
+                console.log(`Não foi possível encontrar dados para "${solutionName}".`);
+            }
+        }
+        
+        // Função para adicionar uma nova categoria
+        function handleAddCategory() {
+            const newCategory = addCategoryInput.value.trim();
+            if (newCategory === '') {
+                return;
+            }
+
+            const existingOption = [...categoryFilter.options].find(opt => opt.value === newCategory);
+            if (!existingOption) {
+                const newOption = document.createElement('option');
+                newOption.value = newCategory;
+                newOption.textContent = newCategory;
+                categoryFilter.appendChild(newOption);
+            }
+            addCategoryInput.value = '';
+        }
+
+        searchBtn.addEventListener('click', handleSearch);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSearch();
+            }
+        });
+
+        addCategoryBtn.addEventListener('click', handleAddCategory);
+        addCategoryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleAddCategory();
+            }
+        });
+
+        // Event listeners para os filtros
+        categoryFilter.addEventListener('change', filterSolutions);
+        regionFilter.addEventListener('change', filterSolutions);
+        priceFilter.addEventListener('change', filterSolutions);
+        resetFiltersBtn.addEventListener('click', resetFilters);
+
+        function resetFilters() {
+            categoryFilter.value = 'all';
+            regionFilter.value = 'all';
+            priceFilter.value = 'all';
+            filterSolutions();
+        }
+
+        function getNumericPrice(priceString) {
+            if (priceString.includes('Grátis') || priceString.includes('Não Publicado')) {
+                return 0;
+            }
+            const cleanPrice = priceString.replace(/[^0-9,.]/g, '').replace(/\./g, '').replace(',', '.');
+            const parts = cleanPrice.split('-');
+            const minPrice = parseFloat(parts[0]);
+            return minPrice;
+        }
+
+        function filterSolutions() {
+            const categoryValue = categoryFilter.value;
+            const regionValue = regionFilter.value;
+            const priceValue = priceFilter.value;
+            selectedSolutions = [];
+            
+            filteredSolutions = allSolutions.filter(solution => {
+                const matchesCategory = categoryValue === 'all' || solution.category === categoryValue;
+                const matchesRegion = regionValue === 'all' || solution.region === regionValue;
+                let matchesPrice = true;
+                const numericPrice = getNumericPrice(solution.price);
+
+                if (priceValue === 'up-to-150') matchesPrice = numericPrice > 0 && numericPrice <= 150;
+                else if (priceValue === '151-300') matchesPrice = numericPrice >= 151 && numericPrice <= 300;
+                else if (priceValue === '301-500') matchesPrice = numericPrice >= 301 && numericPrice <= 500;
+                else if (priceValue === 'up-to-2000') matchesPrice = numericPrice > 0 && numericPrice <= 2000;
+                else if (priceValue === '2001-3000') matchesPrice = numericPrice >= 2001 && numericPrice <= 3000;
+                else if (priceValue === 'above-3000') matchesPrice = numericPrice > 3000;
+                else if (priceValue === 'not-published') matchesPrice = solution.price.includes('Não Publicado') || solution.price.includes('Grátis');
+
+                return matchesCategory && matchesRegion && matchesPrice;
+            });
+
+            visibleSolutions = filteredSolutions.slice(0, 6);
+            renderSolutions();
+            updateSolutionCount();
+        }
+
+        function updateSolutionCount() {
+            solutionCountDisplay.textContent = `Total de Soluções: ${filteredSolutions.length}`;
+        }
+
+        function renderSolutions() {
+            solutionList.innerHTML = '';
+            visibleSolutions.forEach((solution, index) => {
+                const isSelected = selectedSolutions.includes(index);
+                const card = document.createElement('div');
+                card.classList.add('solution-card', 'card', 'p-5', 'space-y-3');
+                if (isSelected) {
+                    card.classList.add('selected');
+                }
+                
+                let dynamicContent = '';
+                const category = solution.category.toLowerCase();
+                
+                if (category === "educação infantil") {
+                    dynamicContent = `
+                        <p class="text-sm text-gray-700"><strong>Faixa Etária:</strong> ${solution.ageGroup}</p>
+                        <p class="text-sm text-gray-700"><strong>Horário:</strong> ${solution.schedule}</p>
+                        <p class="text-sm text-gray-700"><strong>Metodologia:</strong> ${solution.methodology}</p>
+                        <p class="text-sm text-gray-600 italic mt-2">${solution.notes}</p>
+                    `;
+                } else if (category === "academias de ginástica") {
+                    dynamicContent = `
+                        <p class="text-sm text-gray-700"><strong>Serviços:</strong> ${solution.services}</p>
+                        <p class="text-sm text-gray-700"><strong>Horário:</strong> ${solution.schedule}</p>
+                        <p class="text-sm text-gray-600 italic mt-2">Destaque: Ambiente moderno, foco em bem-estar e atividades diversas.</p>
+                    `;
+                } else if (category === "cursos de idiomas") {
+                    dynamicContent = `
+                        <p class="text-sm text-gray-700"><strong>Idiomas Oferecidos:</strong> ${solution.languages}</p>
+                        <p class="text-sm text-gray-700"><strong>Horário:</strong> ${solution.schedule}</p>
+                        <p class="text-sm text-gray-600 italic mt-2">Destaque: Metodologia focada em conversação e prática diária.</p>
+                    `;
+                } else {
+                    // Template genérico para novas categorias
+                    dynamicContent = `
+                        <p class="text-sm text-gray-700"><strong>Notas:</strong> ${solution.notes || 'Nenhuma informação específica disponível.'}</p>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <button class="remove-btn" onclick="removeSolution('${solution.name}', event)">&#x2715;</button>
+                    <h3 class="text-xl font-semibold text-blue-900">${solution.name}</h3>
+                    <p class="text-sm text-gray-500">
+                        <strong>Categoria:</strong> ${solution.category}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        <strong>Localização:</strong>
+                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(solution.address)}" target="_blank" rel="noopener noreferrer">
+                            ${solution.address}, ${solution.region}
+                        </a>
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        <strong>Ponto de Referência:</strong> ${solution.landmark}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        <strong>Telefone:</strong>
+                        <a href="tel:${solution.phone.replace(/[\s()-]/g, '')}">
+                            ${solution.phone}
+                        </a>
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        <strong>Site:</strong>
+                        <a href="${solution.website}" target="_blank" rel="noopener noreferrer">
+                            ${solution.website}
+                        </a>
+                    </p>
+                    ${dynamicContent}
+                    <p class="text-sm text-gray-700"><strong>Preço:</strong> <span class="font-bold">${solution.price}</span></p>
+                `;
+                card.onclick = (e) => {
+                    if (!e.target.classList.contains('remove-btn')) {
+                        toggleSolutionSelection(index);
+                    }
+                };
+                solutionList.appendChild(card);
+            });
+            renderComparison();
+        }
+
+        window.removeSolution = (solutionName, e) => {
+            e.stopPropagation();
+            allSolutions = allSolutions.filter(solution => solution.name !== solutionName);
+            filterSolutions();
+        }
+
+        function toggleSolutionSelection(index) {
+            if (selectedSolutions.includes(index)) {
+                selectedSolutions = selectedSolutions.filter(i => i !== index);
+            } else if (selectedSolutions.length < 3) {
+                selectedSolutions.push(index);
+            }
+            renderSolutions();
+        }
+
+        function toggleFavorite(solutionName) {
+            const solution = allSolutions.find(s => s.name === solutionName);
+            if (solution) {
+                solution.isFavorite = !solution.isFavorite;
+            }
+            renderComparison();
+        }
+
+        function renderComparison() {
+            if (selectedSolutions.length === 0) {
+                comparisonTable.innerHTML = `<p class="text-center text-gray-500">Selecione até 3 soluções acima para comparar.</p>`;
+                return;
+            }
+
+            const solutionsToCompare = selectedSolutions.map(index => visibleSolutions[index]);
+            const tableHTML = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Característica</th>
+                                ${solutionsToCompare.map(solution => `<th class="px-4 py-2 text-left text-sm font-semibold text-gray-800 relative">
+                                    ${solution.name}
+                                    <button class="absolute top-2 right-2 favorite-btn ${solution.isFavorite ? 'favorited' : ''}" onclick="toggleFavorite('${solution.name}')">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z" />
+                                        </svg>
+                                    </button>
+                                </th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Categoria</td>
+                                ${solutionsToCompare.map(solution => `<td class="px-4 py-3 text-sm text-gray-600">${solution.category}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Localização</td>
+                                ${solutionsToCompare.map(solution => `<td class="px-4 py-3 text-sm text-gray-600">
+                                    <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(solution.address)}" target="_blank" rel="noopener noreferrer">
+                                        ${solution.address}, ${solution.region}
+                                    </a>
+                                </td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Preço Estimado</td>
+                                ${solutionsToCompare.map(solution => `<td class="px-4 py-3 text-sm text-gray-600 font-bold">${solution.price}</td>`).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            comparisonTable.innerHTML = tableHTML;
+        }
+
+        window.toggleFavorite = toggleFavorite;
+        
+        filterSolutions();
+    });
+</script>
+
+</body>
+</html>
