@@ -185,6 +185,10 @@
             <p id="import-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
 
+        <button id="save-csv-btn" class="mb-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            Salvar Lista em Arquivo
+        </button>
+
         <!-- Adicionar Nova Categoria -->
         <div class="mb-4">
             <label for="add-category-input" class="block text-sm font-medium text-gray-700">Adicionar nova Categoria:</label>
@@ -295,6 +299,7 @@
         const csvInput = document.getElementById('csv-input');
         const importCsvBtn = document.getElementById('import-csv-btn');
         const importErrorMsg = document.getElementById('import-error-msg');
+        const saveCsvBtn = document.getElementById('save-csv-btn');
         const sidebar = document.getElementById('sidebar');
         const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
         const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
@@ -477,6 +482,59 @@
         }
 
         importCsvBtn.addEventListener('click', handleImportCsv);
+
+        function handleSaveToFile() {
+            if (allSolutions.length === 0) {
+                alert("Não há dados para salvar!");
+                return;
+            }
+
+            // Define the headers for our CSV file
+            const headers = ['Nome', 'Categoria', 'Preço', 'Link', 'Endereço', 'Telefone', 'Detalhes'];
+
+            // Function to format a single row, handling commas by quoting the field
+            const formatRow = (solution) => {
+                const rowData = [
+                    solution.name,
+                    solution.category,
+                    solution.price,
+                    solution.website,
+                    solution.address,
+                    solution.phone,
+                    solution.notes
+                ];
+                return rowData.map(field => {
+                    const str = String(field || '');
+                    // If the field contains a comma, double quote, or newline, enclose it in double quotes
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        // Escape existing double quotes by doubling them
+                        return `"${str.replace(/"/g, '""')}"`;
+                    }
+                    return str;
+                }).join(',');
+            };
+
+            // Convert array of objects to a CSV string
+            const csvContent = [
+                headers.join(','), // Header row
+                ...allSolutions.map(formatRow) // Data rows
+            ].join('\n');
+
+            // Create a Blob and trigger a download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) { // feature detection
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "lista_comparo.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        saveCsvBtn.addEventListener('click', handleSaveToFile);
 
         // Função para simular a busca no "backend"
         async function fetchSolutionData(solutionName) {
@@ -732,12 +790,18 @@
                             ${solution.phone}
                         </a>
                     </p>
-                    <p class="text-sm text-gray-500">
-                        <strong>Site:</strong>
-                        <a href="${solution.website}" target="_blank" rel="noopener noreferrer">
-                            ${solution.website}
-                        </a>
-                    </p>
+                    ${
+                        solution.website && solution.website.startsWith('http')
+                        ? `<p class="text-sm text-gray-500">
+                            <strong>Site:</strong>
+                            <a href="${solution.website}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
+                                Visitar Site
+                            </a>
+                           </p>`
+                        : `<p class="text-sm text-gray-500">
+                            <strong>Site:</strong> ${solution.website || 'N/A'}
+                           </p>`
+                    }
                     ${dynamicContent}
                     <p class="text-sm text-gray-700"><strong>Preço:</strong> <span class="font-bold">${solution.price}</span></p>
                 `;
