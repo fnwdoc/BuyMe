@@ -681,10 +681,21 @@
                         <p class="text-sm text-gray-600 italic mt-2">Destaque: Metodologia focada em conversação e prática diária.</p>
                     `;
                 } else {
-                    // Template genérico para novas categorias
-                    dynamicContent = `
-                        <p class="text-sm text-gray-700"><strong>Notas:</strong> ${solution.notes || 'Nenhuma informação específica disponível.'}</p>
-                    `;
+                    // Template genérico para novas categorias, agora com parsing dos detalhes
+                    if (solution.notes) {
+                        dynamicContent = solution.notes.split(',')
+                            .map(note => note.trim())
+                            .filter(note => note)
+                            .map(note => {
+                                const parts = note.split(':');
+                                if (parts.length === 2) {
+                                    return `<p class="text-sm text-gray-700"><strong>${parts[0].trim()}:</strong> ${parts[1].trim()}</p>`;
+                                }
+                                return `<p class="text-sm text-gray-700">${note}</p>`;
+                            }).join('');
+                    } else {
+                        dynamicContent = `<p class="text-sm text-gray-700">Nenhuma informação específica disponível.</p>`;
+                    }
                 }
 
                 card.innerHTML = `
