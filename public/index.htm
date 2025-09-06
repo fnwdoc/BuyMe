@@ -409,21 +409,34 @@
 
         function parseCsvToObjects(csvText) {
             const rows = csvText.trim().split('\n');
-            const headers = rows.shift().split(',').map(h => h.trim());
+            // Handle the trailing comma in the header
+            const rawHeaders = rows.shift().split(',');
+            const headers = rawHeaders.map(h => h.trim()).filter(h => h); // Filter out empty headers
+
+            // Regex to handle commas inside quotes
+            const csvRowRegex = /("([^"]*)"|[^,]+)(,|$)/g;
 
             return rows.map(row => {
-                const values = row.split(',').map(v => v.trim());
+                let values = [];
+                let match;
+                while (match = csvRowRegex.exec(row)) {
+                    // If the second capture group is not undefined, it's a quoted field
+                    // Otherwise, it's an unquoted field from the first capture group
+                    values.push(match[2] !== undefined ? match[2] : match[1]);
+                }
+
                 let obj = {};
                 headers.forEach((header, index) => {
+                    const value = (values[index] || '').trim();
                     // Mapeia os nomes das colunas da planilha para as chaves do nosso objeto
                     const key = header.toLowerCase();
-                    if (key === 'nome') obj.name = values[index];
-                    else if (key === 'categoria') obj.category = values[index];
-                    else if (key === 'preço') obj.price = values[index];
-                    else if (key === 'link') obj.website = values[index];
-                    else if (key === 'endereço') obj.address = values[index];
-                    else if (key === 'telefone') obj.phone = values[index];
-                    else if (key === 'detalhes') obj.notes = values[index];
+                    if (key === 'nome') obj.name = value;
+                    else if (key === 'categoria') obj.category = value;
+                    else if (key === 'preço') obj.price = value;
+                    else if (key === 'link') obj.website = value;
+                    else if (key === 'endereço') obj.address = value;
+                    else if (key === 'telefone') obj.phone = value;
+                    else if (key === 'detalhes') obj.notes = value;
                     else {
                         // Para outras colunas, podemos adicionar como notas ou um campo genérico
                         obj.notes = (obj.notes || '') + ` ${header}: ${values[index]}`;
@@ -683,7 +696,7 @@
                 } else {
                     // Template genérico para novas categorias, agora com parsing dos detalhes
                     if (solution.notes) {
-                        dynamicContent = solution.notes.split(',')
+                        dynamicContent = solution.notes.split('.') // Split by period for better sentence separation
                             .map(note => note.trim())
                             .filter(note => note)
                             .map(note => {
