@@ -3,31 +3,19 @@ import socketserver
 import json
 import requests
 from functools import partial
-from urllib.parse import urlparse, parse_qs
 
 PORT = 8000
 DIRECTORY = "public"
 
-class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        # We need to serve files from the 'public' directory for GET requests
-        self.file_handler = partial(http.server.SimpleHTTPRequestHandler, directory=DIRECTORY)
-        super().__init__(*args, **kwargs)
-
-    def do_GET(self):
-        # For GET requests, we act like a simple file server
-        # This will serve index.htm and any other assets (css, js) we add later
-        return self.file_handler(self)
+class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
+    # do_GET is already implemented in SimpleHTTPRequestHandler to serve files from the 'public' directory.
+    # We just need to add our custom do_POST method.
 
     def do_POST(self):
-        # We only handle POST requests to the /fetch-sheet endpoint
         if self.path == '/fetch-sheet':
             try:
-                # Get the length of the data
                 content_length = int(self.headers['Content-Length'])
-                # Read the data
                 post_data = self.rfile.read(content_length)
-                # Decode it as JSON
                 body = json.loads(post_data)
 
                 sheet_url = body.get('url')
@@ -57,7 +45,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             # If the endpoint is not recognized, send a 404
             self.send_error(404, 'Endpoint não encontrado.')
 
-# --- Main execution ---
-with socketserver.TCPServer(("", PORT), MyHttpRequestHandler) as httpd:
+# We need to tell the handler to serve from the 'public' directory.
+# This is done by creating a partial function that sets the 'directory' argument.
+Handler = partial(MyHttpRequestHandler, directory=DIRECTORY)
+
+with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print(f"Servidor avançado iniciado. Abra http://localhost:{PORT} no seu navegador.")
     httpd.serve_forever()
