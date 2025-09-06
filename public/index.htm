@@ -449,33 +449,18 @@
                 return;
             }
 
-            // Expressão regular para extrair o ID e o GID da planilha
-            const regex = /spreadsheets\/d\/([a-zA-Z0-9-_]+)\/(?:edit|htmlview)?(?:#gid=([0-9]+))?/;
-            const matches = url.match(regex);
-
-            if (!matches || !matches[1]) {
-                sheetErrorMsg.textContent = "URL inválida. Use o link de compartilhamento do Google Sheets.";
-                sheetErrorMsg.classList.remove('hidden');
-                return;
-            }
-
-            const sheetId = matches[1];
-            const gid = matches[2] || '0'; // Se o gid não for especificado, usa a primeira página (gid=0)
-            
-            const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-
             try {
                 // Feedback visual de carregamento
                 loadSheetBtn.textContent = 'Carregando...';
                 loadSheetBtn.disabled = true;
 
-                // Nova lógica: Envia a URL para o nosso servidor local tratar
+                // Lógica simplificada: Envia a URL crua para o nosso servidor local tratar
                 const serverResponse = await fetch('/fetch-sheet', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ url: csvUrl }),
+                    body: JSON.stringify({ url: url }), // Envia a URL original
                 });
 
                 if (!serverResponse.ok) {
@@ -486,9 +471,9 @@
                 }
 
                 const csvText = await serverResponse.text();
-
-                const newSolutions = parseCsvToObjects(csvText);
                 
+                const newSolutions = parseCsvToObjects(csvText);
+
                 // Substitui as soluções atuais pelas da planilha
                 allSolutions = newSolutions;
                 filterSolutions();
