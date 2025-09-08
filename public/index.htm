@@ -174,19 +174,19 @@
         </button>
         <h2 class="text-2xl font-semibold mb-4 text-gray-800">Operações</h2>
 
-        <!-- Importar via CSV -->
+        <!-- Importar via JSON -->
         <div class="mb-4">
-            <label for="csv-input" class="block text-sm font-medium text-gray-700">Importar Dados (CSV):</label>
-            <textarea id="csv-input" rows="5" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 mt-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Cole aqui o conteúdo do seu arquivo .csv..."></textarea>
-            <button id="import-csv-btn" class="mt-2 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                Importar CSV
+            <label for="json-input" class="block text-sm font-medium text-gray-700">Importar Dados (JSON):</label>
+            <textarea id="json-input" rows="5" class="block w-full border border-gray-300 rounded-md shadow-sm p-2 mt-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Cole aqui o conteúdo do seu arquivo .json..."></textarea>
+            <button id="import-json-btn" class="mt-2 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Importar JSON
             </button>
-            <p class="text-xs text-gray-500 mt-1">No Google Sheets, vá em Arquivo > Fazer download > CSV.</p>
-            <p id="import-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
+            <p class="text-xs text-gray-500 mt-1">Para carregar uma lista, cole o conteúdo de um arquivo .json salvo anteriormente.</p>
+            <p id="json-error-msg" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
 
-        <button id="save-csv-btn" class="mb-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-            Salvar Lista em Arquivo
+        <button id="save-json-btn" class="mb-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            Salvar Lista (JSON)
         </button>
 
         <!-- Adicionar Nova Categoria -->
@@ -296,10 +296,10 @@
         const resetFiltersBtn = document.getElementById('reset-filters-btn');
         const addCategoryInput = document.getElementById('add-category-input');
         const addCategoryBtn = document.getElementById('add-category-btn');
-        const csvInput = document.getElementById('csv-input');
-        const importCsvBtn = document.getElementById('import-csv-btn');
-        const importErrorMsg = document.getElementById('import-error-msg');
-        const saveCsvBtn = document.getElementById('save-csv-btn');
+        const jsonInput = document.getElementById('json-input');
+        const importJsonBtn = document.getElementById('import-json-btn');
+        const jsonErrorMsg = document.getElementById('json-error-msg');
+        const saveJsonBtn = document.getElementById('save-json-btn');
         const sidebar = document.getElementById('sidebar');
         const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
         const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
@@ -412,76 +412,35 @@
 
         // --- Nova Lógica de Importação do Google Sheets ---
 
-        function parseCsvToObjects(csvText) {
-            const rows = csvText.trim().split('\n');
-            // Handle the trailing comma in the header
-            const rawHeaders = rows.shift().split(',');
-            const headers = rawHeaders.map(h => h.trim()).filter(h => h); // Filter out empty headers
+        function handleImportJson() {
+            const jsonText = jsonInput.value.trim();
+            jsonErrorMsg.classList.add('hidden');
 
-            // Regex to handle commas inside quotes
-            const csvRowRegex = /("([^"]*)"|[^,]+)(,|$)/g;
-
-            return rows.map(row => {
-                let values = [];
-                let match;
-                while (match = csvRowRegex.exec(row)) {
-                    // If the second capture group is not undefined, it's a quoted field
-                    // Otherwise, it's an unquoted field from the first capture group
-                    values.push(match[2] !== undefined ? match[2] : match[1]);
-                }
-
-                let obj = {};
-                headers.forEach((header, index) => {
-                    const value = (values[index] || '').trim();
-                    // Mapeia os nomes das colunas da planilha para as chaves do nosso objeto
-                    const key = header.toLowerCase();
-                    if (key === 'nome') obj.name = value;
-                    else if (key === 'categoria') obj.category = value;
-                    else if (key === 'preço') obj.price = value;
-                    else if (key === 'link') obj.website = value;
-                    else if (key === 'endereço') obj.address = value;
-                    else if (key === 'telefone') obj.phone = value;
-                    else if (key === 'detalhes') obj.notes = value;
-                    else {
-                        // Para outras colunas, podemos adicionar como notas ou um campo genérico
-                        obj.notes = (obj.notes || '') + ` ${header}: ${values[index]}`;
-                    }
-                });
-                 // Adiciona valores padrão para campos que não estão na planilha
-                obj.region = obj.region || 'N/A';
-                obj.address = obj.address || 'N/A';
-                obj.landmark = obj.landmark || 'N/A';
-                obj.phone = obj.phone || 'N/A';
-                obj.isFavorite = false;
-                return obj;
-            });
-        }
-
-        function handleImportCsv() {
-            const csvText = csvInput.value.trim();
-            importErrorMsg.classList.add('hidden');
-
-            if (csvText === '') {
-                importErrorMsg.textContent = "Por favor, cole o conteúdo do CSV na área de texto.";
-                importErrorMsg.classList.remove('hidden');
+            if (jsonText === '') {
+                jsonErrorMsg.textContent = "Por favor, cole o conteúdo do arquivo JSON na área de texto.";
+                jsonErrorMsg.classList.remove('hidden');
                 return;
             }
 
             try {
-                const newSolutions = parseCsvToObjects(csvText);
+                const newSolutions = JSON.parse(jsonText);
+
+                if (!Array.isArray(newSolutions)) {
+                    throw new Error("O conteúdo fornecido não é uma lista válida de soluções.");
+                }
 
                 // Substitui as soluções atuais pelas da planilha
                 allSolutions = newSolutions;
                 filterSolutions(); // Re-renderiza a lista com os novos dados
-                csvInput.value = ''; // Limpa a área de texto
+                jsonInput.value = ''; // Limpa a área de texto
 
             } catch (error) {
-                importErrorMsg.textContent = `Falha ao processar os dados: ${error.message}`;
-                importErrorMsg.classList.remove('hidden');
+                jsonErrorMsg.textContent = `Falha ao processar os dados JSON: ${error.message}`;
+                jsonErrorMsg.classList.remove('hidden');
             }
         }
 
-        importCsvBtn.addEventListener('click', handleImportCsv);
+        importJsonBtn.addEventListener('click', handleImportJson);
 
         function handleSaveToFile() {
             if (allSolutions.length === 0) {
@@ -489,44 +448,17 @@
                 return;
             }
 
-            // Define the headers for our CSV file
-            const headers = ['Nome', 'Categoria', 'Preço', 'Link', 'Endereço', 'Telefone', 'Detalhes'];
-
-            // Function to format a single row, handling commas by quoting the field
-            const formatRow = (solution) => {
-                const rowData = [
-                    solution.name,
-                    solution.category,
-                    solution.price,
-                    solution.website,
-                    solution.address,
-                    solution.phone,
-                    solution.notes
-                ];
-                return rowData.map(field => {
-                    const str = String(field || '');
-                    // If the field contains a comma, double quote, or newline, enclose it in double quotes
-                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                        // Escape existing double quotes by doubling them
-                        return `"${str.replace(/"/g, '""')}"`;
-                    }
-                    return str;
-                }).join(',');
-            };
-
-            // Convert array of objects to a CSV string
-            const csvContent = [
-                headers.join(','), // Header row
-                ...allSolutions.map(formatRow) // Data rows
-            ].join('\n');
+            // Convert array of objects to a JSON string
+            // Using null, 2 for pretty-printing, which makes the JSON file human-readable
+            const jsonContent = JSON.stringify(allSolutions, null, 2);
 
             // Create a Blob and trigger a download
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
             const link = document.createElement("a");
             if (link.download !== undefined) { // feature detection
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
-                link.setAttribute("download", "lista_comparo.csv");
+                link.setAttribute("download", "lista_comparo.json");
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
@@ -534,7 +466,7 @@
             }
         }
 
-        saveCsvBtn.addEventListener('click', handleSaveToFile);
+        saveJsonBtn.addEventListener('click', handleSaveToFile);
 
         // Função para simular a busca no "backend"
         async function fetchSolutionData(solutionName) {
